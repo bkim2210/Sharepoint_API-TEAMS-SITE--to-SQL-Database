@@ -10,8 +10,6 @@ from office365.sharepoint.client_context import ClientContext
 from office365.sharepoint.files.file import File
 
 # Parse command line arguments or use default values
-# This section handles command-line arguments for database connection details.
-# If arguments are not provided, default values are used.
 try:
     script, database, server, auditKey, username, password, loadtype, table = sys.argv
 except Exception:
@@ -24,17 +22,13 @@ except Exception:
     loadtype = "Enter Load Type"
 
 # Connect to Datawarehouse
-# This section connects to the data warehouse using SQL Alchemy and pyodbc.
-# It sets up the engine for database interaction.
 driver_name = ''
-# Determine available drivers for pyodbc
 driver_names = [x for x in pyodbc.drivers() if x.endswith(' for SQL Server')]
 if driver_names:
     driver_name = driver_names[0]
 else:
     print('(No suitable driver found. Cannot connect.)')
 
-# Enable connection using sqlalchemy
 connection_string = "DRIVER={" + driver_name + "};SERVER=" + server + ";DATABASE=" + database + ";trusted_connection=yes"
 connection_url = sa.engine.URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
 engine = sa.create_engine(connection_url)
@@ -74,7 +68,7 @@ worksheets_headers = {'Authorization': 'Bearer ' + access_token}
 worksheets_response = requests.get(worksheets_url, headers=worksheets_headers)
 worksheets_json = worksheets_response.json()
 
-
+# Extract data from the "Master Product List" worksheet and store it in a DataFrame
 if 'value' in worksheets_json:
     for worksheet in worksheets_json['value']:
         worksheet_name = worksheet.get('name')
@@ -82,7 +76,7 @@ if 'value' in worksheets_json:
         worksheet_visibility = worksheet.get('visibility')
 
         # Check if the worksheet is visible and is the "Master Product List"
-        if  worksheet_name == 'Master Product List':
+        if worksheet_name == 'Master Product List':
             # Get data from the worksheet
             worksheet_data_url = f'https://graph.microsoft.com/v1.0/sites/{site_id}/drive/items/{excel_file_id}/workbook/worksheets/{worksheet_id}/usedRange'
             worksheet_data_headers = {'Authorization': 'Bearer ' + access_token}
@@ -95,14 +89,18 @@ if 'value' in worksheets_json:
 
                 # Create a DataFrame for the "Master Product List" sheet
                 df = pd.DataFrame(data, columns=worksheet_data_json['values'][0])
+
+# Try to insert DataFrame data into the specified SQL table
 try:
-         df.to_sql(
-            name ="Enter Table Name", 
-            schema ="Enter Schema", 
-            con=engine, 
-            index=False, 
-            if_exists = "append"
-        )
+    df.to_sql(
+        name="Enter Table Name",
+        schema="Enter Schema",
+        con=engine,
+        index=False,
+        if_exists="append"
+    )
 except Exception as e:
+    # Log the error and raise the exception
     errorLog(engine, e)
-    raise e                
+    raise e
+               
